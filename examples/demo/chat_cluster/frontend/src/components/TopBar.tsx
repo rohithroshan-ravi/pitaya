@@ -6,7 +6,6 @@ const STATUS_LABEL: Record<Status, string> = {
   connecting: 'Connecting',
   online: 'Online',
   offline: 'Disconnected',
-  kicked: 'Kicked',
 }
 
 function greeting() {
@@ -23,12 +22,12 @@ export function TopBar(props: {
   onBell: () => void
   onReconnect: () => void
   onToggleMenu: () => void
-  onToggleSide: () => void
+  onToggleMembers: () => void
 }) {
   const { me, status, query, unread, onQuery, onBell, onReconnect } = props
   return (
     <header className="topbar">
-      <button className="round only-mobile" onClick={props.onToggleMenu} aria-label="Channels">
+      <button className="round only-mobile" onClick={props.onToggleMenu} aria-label="Servers and channels">
         <Icon name="menu" />
       </button>
       <h2 className="greeting">
@@ -45,7 +44,7 @@ export function TopBar(props: {
       )}
       <label className="search">
         <Icon name="search" size={18} />
-        <input placeholder="Search messages" value={query} onChange={(e) => onQuery(e.target.value)} />
+        <input placeholder="Search this conversation" value={query} onChange={(e) => onQuery(e.target.value)} />
         {query && (
           <button className="clear" onClick={() => onQuery('')} aria-label="Clear search">
             <Icon name="close" size={14} />
@@ -56,8 +55,8 @@ export function TopBar(props: {
         <Icon name="bell" />
         {unread > 0 && <span className="round-dot" />}
       </button>
-      <button className="round only-narrow" onClick={props.onToggleSide} title="People and cluster" aria-label="People and cluster">
-        <Icon name="stats" />
+      <button className="round only-narrow" onClick={props.onToggleMembers} title="Members and cluster" aria-label="Members and cluster">
+        <Icon name="users" />
       </button>
     </header>
   )

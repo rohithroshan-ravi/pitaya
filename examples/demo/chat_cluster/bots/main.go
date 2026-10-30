@@ -18,11 +18,16 @@ import (
 	"github.com/topfreegames/pitaya/v3/pkg/client"
 )
 
-var lines = []string{
-	"gg", "anyone up for a match?", "lag on my side 😅", "nice play!", "brb",
-	"who's winning?", "let's gooo", "that boss is tough", "lol", "rematch?",
-	"pitaya handles this load easily", "hello from a bot 🤖",
-}
+var (
+	lines = []string{
+		"gg", "anyone up for a match?", "lag on my side 😅", "nice play!", "brb",
+		"who's winning?", "let's gooo", "that boss is tough", "lol", "rematch?",
+		"pitaya handles this load easily", "hello from a bot 🤖",
+	}
+	// Channels of the default guild, see Store.EnsureDefaultGuild.
+	channels = []string{"hq-general", "hq-game", "hq-random"}
+	emojis   = []string{"👍", "😂", "🔥", "🎉", "❤️"}
+)
 
 func main() {
 	addr := flag.String("addr", "localhost:3250", "connector websocket address")
@@ -59,11 +64,25 @@ func runBot(addr, name string, interval time.Duration, verbose bool, stop <-chan
 	}
 	defer c.Disconnect()
 
-	// Pushes must be drained or the client's incoming buffer fills up.
+	// Pushes must be drained or the client's incoming buffer fills up. Now and
+	// then a bot reacts to someone else's message; the react is handed to the
+	// main loop because the client must not be written from two goroutines.
+	reactions := make(chan services.ReactRequest, 8)
 	go func() {
 		for m := range c.MsgChannel() {
 			if verbose {
 				log.Printf("%s <- %s %s", name, m.Route, m.Data)
+			}
+			if m.Route != "onMessage" || rand.Float64() > 0.08 {
+				continue
+			}
+			var msg services.Message
+			if json.Unmarshal(m.Data, &msg) != nil || msg.Author == name {
+				continue
+			}
+			select {
+			case reactions <- services.ReactRequest{GuildID: msg.GuildID, ChannelID: msg.ChannelID, ID: msg.ID, Emoji: emojis[rand.IntN(len(emojis))]}:
+			default:
 			}
 		}
 	}()
@@ -78,18 +97,28 @@ func runBot(addr, name string, interval time.Duration, verbose bool, stop <-chan
 		select {
 		case <-stop:
 			return nil
+		case r := <-reactions:
+			data, _ := json.Marshal(&r)
+			if _, err := c.SendRequest("room.room.react", data); err != nil {
+				return err
+			}
+			continue
 		case <-time.After(wait):
 		}
 
-		channel := services.Channels[rand.IntN(len(services.Channels))]
-		typing, _ := json.Marshal(&services.TypingRequest{Channel: channel})
+		channel := channels[rand.IntN(len(channels))]
+		typing, _ := json.Marshal(&services.ChannelRequest{GuildID: services.DefaultGuildID, ChannelID: channel})
 		if err := c.SendNotify("room.room.typing", typing); err != nil {
 			return err
 		}
 		time.Sleep(time.Duration(300+rand.IntN(900)) * time.Millisecond)
 
-		msg, _ := json.Marshal(&services.ChannelMessage{Channel: channel, Content: lines[rand.IntN(len(lines))]})
-		if err := c.SendNotify("room.room.message", msg); err != nil {
+		msg, _ := json.Marshal(&services.SendMessageRequest{
+			GuildID:   services.DefaultGuildID,
+			ChannelID: channel,
+			Content:   lines[rand.IntN(len(lines))],
+		})
+		if _, err := c.SendRequest("room.room.message", msg); err != nil {
 			return err
 		}
 	}

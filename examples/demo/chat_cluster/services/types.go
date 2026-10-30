@@ -3,29 +3,34 @@ package services
 const (
 	// FrontendType is the server type clients connect to
 	FrontendType = "connector"
-	// LobbyGroup holds every user that joined the chat, across all servers
+	// LobbyGroup holds every online user, across all guilds and servers
 	LobbyGroup = "lobby"
 )
 
-// Channels are the chat channels a message can be sent to
-var Channels = []string{"general", "game", "random"}
+// GuildGroup is the Pitaya group holding a guild's online members
+func GuildGroup(gid string) string { return "guild:" + gid }
 
 type (
-	// JoinRequest is sent by the client to enter the chat
+	// JoinRequest is sent by the client to log in
 	JoinRequest struct {
 		Name     string `json:"name"`
 		AdminKey string `json:"adminKey"`
 	}
 
-	// JoinResponse carries everything the client needs to render the chat
+	// GuildSummary is a guild as seen by one member
+	GuildSummary struct {
+		Guild
+		Role string `json:"role"`
+	}
+
+	// JoinResponse carries everything the client needs after login
 	JoinResponse struct {
-		Code     int      `json:"code"`
-		Result   string   `json:"result"`
-		Name     string   `json:"name,omitempty"`
-		Admin    bool     `json:"admin"`
-		Server   string   `json:"server,omitempty"`
-		Users    []string `json:"users,omitempty"`
-		Channels []string `json:"channels,omitempty"`
+		Code   int            `json:"code"`
+		Result string         `json:"result"`
+		Name   string         `json:"name,omitempty"`
+		Server string         `json:"server,omitempty"`
+		Online []string       `json:"online,omitempty"`
+		Guilds []GuildSummary `json:"guilds,omitempty"`
 	}
 
 	// Response is a generic request result
@@ -34,30 +39,99 @@ type (
 		Result string `json:"result"`
 	}
 
-	// ChannelMessage is sent by the client to a channel
-	ChannelMessage struct {
-		Channel string `json:"channel"`
-		Content string `json:"content"`
+	// GuildRequest identifies a guild
+	GuildRequest struct {
+		GuildID string `json:"guildId"`
 	}
 
-	// ChatMessage is pushed to every user when someone posts in a channel
-	ChatMessage struct {
-		Channel string `json:"channel"`
+	// MemberInfo is a member plus their presence
+	MemberInfo struct {
+		Member
+		Online bool `json:"online"`
+	}
+
+	// GuildDetails is everything shown when opening a guild
+	GuildDetails struct {
+		Code     int          `json:"code"`
+		Result   string       `json:"result"`
+		Guild    GuildSummary `json:"guild"`
+		Channels []Channel    `json:"channels"`
+		Members  []MemberInfo `json:"members"`
+	}
+
+	// CreateGuildRequest creates a new guild
+	CreateGuildRequest struct {
+		Name string `json:"name"`
+		Icon string `json:"icon"`
+	}
+
+	// JoinGuildRequest joins a guild by invite code
+	JoinGuildRequest struct {
+		Invite string `json:"invite"`
+	}
+
+	// GuildResponse returns one guild
+	GuildResponse struct {
+		Code   int           `json:"code"`
+		Result string        `json:"result"`
+		Guild  *GuildSummary `json:"guild,omitempty"`
+	}
+
+	// CreateChannelRequest adds a channel to a guild
+	CreateChannelRequest struct {
+		GuildID string `json:"guildId"`
 		Name    string `json:"name"`
-		Content string `json:"content"`
-		Server  string `json:"server"`
-		Ts      int64  `json:"ts"`
+		Topic   string `json:"topic"`
 	}
 
-	// TypingRequest is sent by the client while composing a message
-	TypingRequest struct {
-		Channel string `json:"channel"`
+	// ChannelRequest identifies a channel
+	ChannelRequest struct {
+		GuildID   string `json:"guildId"`
+		ChannelID string `json:"channelId"`
 	}
 
-	// Typing is pushed to everyone when a user is typing
-	Typing struct {
-		Channel string `json:"channel"`
+	// HistoryRequest asks for older messages in a channel
+	HistoryRequest struct {
+		GuildID   string `json:"guildId"`
+		ChannelID string `json:"channelId"`
+		Before    string `json:"before"`
+	}
+
+	// HistoryResponse returns a page of messages, oldest first
+	HistoryResponse struct {
+		Code     int       `json:"code"`
+		Result   string    `json:"result"`
+		Messages []Message `json:"messages"`
+		More     bool      `json:"more"`
+	}
+
+	// SendMessageRequest posts a message in a channel
+	SendMessageRequest struct {
+		GuildID   string `json:"guildId"`
+		ChannelID string `json:"channelId"`
+		Content   string `json:"content"`
+	}
+
+	// MessageRequest identifies a message
+	MessageRequest struct {
+		GuildID   string `json:"guildId"`
+		ChannelID string `json:"channelId"`
+		ID        string `json:"id"`
+	}
+
+	// ReactRequest toggles a reaction on a message
+	ReactRequest struct {
+		GuildID   string `json:"guildId"`
+		ChannelID string `json:"channelId"`
+		ID        string `json:"id"`
+		Emoji     string `json:"emoji"`
+	}
+
+	// MemberRequest targets a member of a guild
+	MemberRequest struct {
+		GuildID string `json:"guildId"`
 		Name    string `json:"name"`
+		Role    string `json:"role,omitempty"`
 	}
 
 	// DirectMessageRequest is sent by the client to message one user
@@ -75,20 +149,42 @@ type (
 		Ts      int64  `json:"ts"`
 	}
 
-	// KickRequest is sent by an admin to remove a user
-	KickRequest struct {
-		Name string `json:"name"`
+	// Typing is pushed while a user composes a message
+	Typing struct {
+		GuildID   string `json:"guildId"`
+		ChannelID string `json:"channelId"`
+		Name      string `json:"name"`
 	}
 
-	// UserEvent is pushed when a user joins or leaves
-	UserEvent struct {
+	// Presence is pushed to everyone when a user comes online or goes offline
+	Presence struct {
 		Name   string `json:"name"`
-		Server string `json:"server,omitempty"`
+		Online bool   `json:"online"`
 	}
 
-	// Notice is a system message shown to everyone
-	Notice struct {
-		Text string `json:"text"`
+	// MemberEvent is pushed when a guild's membership changes
+	MemberEvent struct {
+		GuildID string     `json:"guildId"`
+		Member  MemberInfo `json:"member"`
+	}
+
+	// ChannelEvent is pushed when a channel is created or deleted
+	ChannelEvent struct {
+		GuildID string  `json:"guildId"`
+		Channel Channel `json:"channel"`
+	}
+
+	// MessageDeleted is pushed when a message is removed
+	MessageDeleted struct {
+		GuildID   string `json:"guildId"`
+		ChannelID string `json:"channelId"`
+		ID        string `json:"id"`
+	}
+
+	// GuildRemoved tells a user they no longer belong to a guild
+	GuildRemoved struct {
+		GuildID string `json:"guildId"`
+		Reason  string `json:"reason"`
 	}
 
 	// ServerStats is pushed periodically by every room server

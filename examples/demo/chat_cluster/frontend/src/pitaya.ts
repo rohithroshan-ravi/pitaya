@@ -1,5 +1,5 @@
 // Typed wrapper over the global `starx` client loaded in index.html, plus the
-// wire types shared with services/types.go.
+// wire types shared with services/types.go and services/store.go.
 
 interface Starx {
   init(params: { host: string; port: number; path: string }, cb: () => void): void
@@ -23,23 +23,65 @@ export const starx = (): Starx => window.starx
 
 // Routes are serverType.component.method; "room" requests are forwarded by
 // the connector to one of the room servers.
+const route = (method: string) => `room.room.${method}`
 export const routes = {
-  join: 'room.room.join',
-  message: 'room.room.message',
-  typing: 'room.room.typing',
-  dm: 'room.room.dm',
-  kick: 'room.room.kick',
+  join: route('join'),
+  openGuild: route('openguild'),
+  history: route('history'),
+  message: route('message'),
+  deleteMessage: route('deletemessage'),
+  react: route('react'),
+  typing: route('typing'),
+  createGuild: route('createguild'),
+  joinGuild: route('joinguild'),
+  leaveGuild: route('leaveguild'),
+  deleteGuild: route('deleteguild'),
+  createChannel: route('createchannel'),
+  deleteChannel: route('deletechannel'),
+  setRole: route('setrole'),
+  kickMember: route('kickmember'),
+  dm: route('dm'),
 }
 
-export interface JoinResponse {
-  code: number | string
-  result?: string
-  msg?: string
+export type Role = 'owner' | 'admin' | 'member'
+
+export const roleRank = (role?: string) => (role === 'owner' ? 3 : role === 'admin' ? 2 : role === 'member' ? 1 : 0)
+
+export interface Guild {
+  id: string
   name: string
-  admin: boolean
+  icon: string
+  ownerId: string
+  invite: string
+  created: number
+  role: Role
+}
+
+export interface Channel {
+  id: string
+  guildId: string
+  name: string
+  topic: string
+  created: number
+}
+
+export interface Member {
+  name: string
+  role: Role
+  joined: number
+  online?: boolean
+}
+
+export interface Message {
+  id: string
+  guildId: string
+  channelId: string
+  author: string
+  content: string
+  mentions?: string[] | null
+  reactions?: Record<string, string[]> | null
   server: string
-  users: string[] | null
-  channels: string[]
+  ts: number
 }
 
 export interface Response {
@@ -48,12 +90,26 @@ export interface Response {
   msg?: string
 }
 
-export interface ChatMessage {
-  channel: string
+export interface JoinResponse extends Response {
   name: string
-  content: string
   server: string
-  ts: number
+  online: string[] | null
+  guilds: Guild[] | null
+}
+
+export interface GuildDetails extends Response {
+  guild: Guild
+  channels: Channel[]
+  members: Member[]
+}
+
+export interface GuildResponse extends Response {
+  guild?: Guild
+}
+
+export interface HistoryResponse extends Response {
+  messages: Message[] | null
+  more: boolean
 }
 
 export interface DirectMessage {
@@ -65,17 +121,35 @@ export interface DirectMessage {
 }
 
 export interface Typing {
-  channel: string
+  guildId: string
+  channelId: string
   name: string
 }
 
-export interface UserEvent {
+export interface Presence {
   name: string
-  server?: string
+  online: boolean
 }
 
-export interface Notice {
-  text: string
+export interface MemberEvent {
+  guildId: string
+  member: Member
+}
+
+export interface ChannelEvent {
+  guildId: string
+  channel: Channel
+}
+
+export interface MessageDeleted {
+  guildId: string
+  channelId: string
+  id: string
+}
+
+export interface GuildRemoved {
+  guildId: string
+  reason: string
 }
 
 export interface ServerStats {

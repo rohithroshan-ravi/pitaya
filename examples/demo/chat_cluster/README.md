@@ -1,20 +1,29 @@
 # chat_cluster
 
-A clustered chat built on Pitaya, with a React frontend. It shows the parts of
-Pitaya that matter in a real game backend:
+A Discord-style chat built on a Pitaya cluster, with a React frontend. Users
+create servers (guilds), invite friends, organise text channels, and moderate
+with roles. Every request is handled by whichever room server the connector
+picks, and all state lives in etcd, so room servers can come and go.
 
-| Feature | Pitaya API |
+| Feature | How it works |
 |---|---|
 | Frontend/backend split: one `connector` takes WebSockets, any number of `room` servers run the logic | `NewDefaultBuilder(isFrontend, ...)`, `acceptor.NewWSAcceptor` |
-| Requests load-balanced across room servers, with each message tagged "via room-N" | default random router + etcd service discovery |
-| Live online-user list shared by all servers | `groups.NewEtcdGroupService`, `GroupAddMember`, `GroupBroadcast` |
-| Leave events | `SessionPool.OnSessionClose` (frontend only; backends cannot register `OnClose`) |
-| Channels with unread badges, typing indicator | `notify` routes (no response) |
-| Private messages | `SendPushToUsers` to two users |
-| Admin kick | session data set on a backend + `PushToFront`, then `SendKickToUsers` |
-| Cluster stats panel and failover | periodic `GroupBroadcast` from each room server, 5s etcd lease TTL |
+| Requests load-balanced across room servers; each message is tagged "via room-N" | default random router + etcd service discovery |
+| Servers, channels, members, roles, invites, message history (500 per channel) | `services/store.go`, an etcd-backed store shared by all room servers |
+| Messages reach only a server's online members | one Pitaya group per guild (`guild:<id>`) + `GroupBroadcast` |
+| Online/offline presence | `lobby` group; the connector broadcasts offline from `SessionPool.OnSessionClose` (backends cannot register `OnClose`) |
+| Roles: owner, admin, member | owner promotes/demotes; admins create/delete channels, delete messages, kick lower roles |
+| Reactions | optimistic etcd transaction so concurrent reactions all count |
+| @mentions with autocomplete, unread and mention badges | server resolves mentions against guild members |
+| Direct messages | `SendPushToUsers` to two users |
+| Typing indicator | `notify` route (no response) |
+| Cluster stats and failover | each room server broadcasts its stats every 2s; 5s etcd lease TTL |
 | Load test | `pkg/client` bots over WebSocket |
 | Metrics | Prometheus on `--metrics-port` |
+
+There is no login: your nickname is your identity. Joining again with the same
+nickname brings back your servers, roles and history. Only one session per
+nickname can be online at a time.
 
 ## Run
 
@@ -26,29 +35,36 @@ make run-chat-cluster-connector                       # :3250 websocket, :9090 m
 make run-chat-cluster-room                            # room-1, :9091 metrics
 make run-chat-cluster-room NAME=room-2 METRICS_PORT=9092
 make run-chat-cluster-frontend                        # http://localhost:5173
-make run-chat-cluster-bots N=20                       # optional load
+make run-chat-cluster-bots N=20                       # optional load in Pitaya HQ
 ```
 
-Open http://localhost:5173 in two tabs. To get admin (kick) rights, click
-"Join as admin?" and use the key `pitaya`, or set another key with `--admin-key`.
+Everyone joins **Pitaya HQ** (invite code `pitaya`). To be an admin there,
+click "Join as Pitaya HQ admin?" and use the key `pitaya` (change it with
+`--admin-key`). Anyone can create their own server with the **+** button and
+becomes its owner.
 
 ### Things to try
 
-- Watch the "via room-N" tag under messages change between servers.
-- Stop a room server with Ctrl-C. Its card in **Cluster statistic** turns
-  offline and the other servers keep handling messages. Start it again and it
-  rejoins.
-- Run the bots and watch msg/s climb in the stats ring.
-- `curl localhost:9091/metrics | grep pitaya` to see a room server's metrics.
+- Open two browser tabs with different nicknames. Create a server in one,
+  copy the invite from the server menu, and join it from the other.
+- Type `@` in a channel to mention someone; the mentioned user gets a badge.
+- Hover a message to react or delete it.
+- As owner, click a member to make them admin or kick them.
+- Stop a room server with Ctrl-C. Its chip in the Cluster card turns off and
+  the other servers keep handling requests. Restart it and it rejoins.
+- Restart everything: servers, channels and history are still there.
+
+To wipe all chat data: `docker compose -f examples/testing/docker-compose.yml exec etcd etcdctl del --prefix chat/`.
 
 ## Layout
 
 ```
-main.go            server entrypoint (--type connector|room)
-services/room.go   chat handlers (join, message, typing, dm, kick) and stats
-services/connector.go  leave handling on the frontend
-bots/main.go       load-test bots
-frontend/          React + Vite client
+main.go                server entrypoint (--type connector|room)
+services/store.go      etcd store: guilds, channels, members, invites, messages
+services/room.go       request handlers (join, guilds, channels, messages, roles)
+services/connector.go  group reset on start and offline handling
+bots/main.go           load-test bots
+frontend/              React + Vite client
 ```
 
 `frontend/public/protocol.js` and `starx-wsclient.js` are copies of the

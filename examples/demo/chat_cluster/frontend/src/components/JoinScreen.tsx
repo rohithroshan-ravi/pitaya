@@ -21,14 +21,14 @@ export function JoinScreen(props: { connecting: boolean; error: string; onJoin: 
       <div className="card">
         <div className="logo">🐉</div>
         <h2>Pitaya Chat</h2>
-        <p>Pick a nickname to join the cluster</p>
+        <p>Pick a nickname. Use the same one later to get your servers and history back.</p>
         <form onSubmit={submit}>
           <input autoFocus maxLength={24} placeholder="Your nickname" value={name} onChange={(e) => setName(e.target.value)} />
           {showAdmin ? (
-            <input type="password" placeholder="Admin key (optional)" value={adminKey} onChange={(e) => setAdminKey(e.target.value)} />
+            <input type="password" placeholder="HQ admin key (optional)" value={adminKey} onChange={(e) => setAdminKey(e.target.value)} />
           ) : (
             <button type="button" className="link" onClick={() => setShowAdmin(true)}>
-              Join as admin?
+              Join as Pitaya HQ admin?
             </button>
           )}
           {error && <div className="error">{error}</div>}
@@ -39,21 +39,6 @@ export function JoinScreen(props: { connecting: boolean; error: string; onJoin: 
         <small>
           ws://{PITAYA_HOST}:{PITAYA_PORT}
         </small>
-      </div>
-    </div>
-  )
-}
-
-export function KickedScreen({ by, onRejoin }: { by: string; onRejoin: () => void }) {
-  return (
-    <div className="overlay">
-      <div className="card">
-        <div className="logo danger">🚫</div>
-        <h2>You were kicked</h2>
-        <p>{by ? `${by} removed you from the chat.` : 'An admin removed you from the chat.'}</p>
-        <button onClick={onRejoin} className="wide">
-          Back to start
-        </button>
       </div>
     </div>
   )

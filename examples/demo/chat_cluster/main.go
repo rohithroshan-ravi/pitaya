@@ -15,13 +15,14 @@ import (
 	"github.com/topfreegames/pitaya/v3/pkg/config"
 	"github.com/topfreegames/pitaya/v3/pkg/groups"
 	"github.com/topfreegames/pitaya/v3/pkg/logger"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 func main() {
 	svType := flag.String("type", services.FrontendType, "server type: connector or room")
 	port := flag.Int("port", 3250, "websocket port (connector only)")
 	name := flag.String("name", "", "display name of a room server (default room-<random>)")
-	adminKey := flag.String("admin-key", "pitaya", "key that grants admin (kick) rights on join; empty disables admins")
+	adminKey := flag.String("admin-key", "pitaya", "key that makes you an admin of Pitaya HQ on join; empty disables it")
 	metricsPort := flag.Int("metrics-port", 0, "prometheus metrics port, 0 disables")
 	flag.Parse()
 
@@ -45,8 +46,19 @@ func main() {
 
 	builder := pitaya.NewDefaultBuilder(isFrontend, *svType, pitaya.Cluster, map[string]string{"name": *name}, *conf)
 
-	// etcd-backed groups so every server sees the same lobby members.
-	gs, err := groups.NewEtcdGroupService(conf.Groups.Etcd, nil)
+	// One etcd client for both the chat store and the group service, so every
+	// server sees the same guilds, messages and online members.
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:   conf.Cluster.SD.Etcd.Endpoints,
+		DialTimeout: conf.Cluster.SD.Etcd.DialTimeout,
+	})
+	if err != nil {
+		logger.Log.Fatalf("failed to connect to etcd: %s", err)
+	}
+	defer cli.Close()
+	store := services.NewStore(cli)
+
+	gs, err := groups.NewEtcdGroupService(conf.Groups.Etcd, cli)
 	if err != nil {
 		logger.Log.Fatalf("failed to create etcd group service: %s", err)
 	}
@@ -60,15 +72,12 @@ func main() {
 	defer app.Shutdown()
 
 	if isFrontend {
-		// Members left over from a previous run (e.g. a crash) are stale.
-		ctx := context.Background()
-		_ = app.GroupDelete(ctx, services.LobbyGroup)
-		if err := app.GroupCreate(ctx, services.LobbyGroup); err != nil {
-			logger.Log.Fatalf("failed to create lobby group: %s", err)
+		if err := services.ResetGroups(context.Background(), app, store); err != nil {
+			logger.Log.Fatalf("failed to reset groups: %s", err)
 		}
-		builder.SessionPool.OnSessionClose(services.OnSessionClose(app))
+		builder.SessionPool.OnSessionClose(services.OnSessionClose(app, store))
 	} else {
-		app.Register(services.NewRoom(app, *name, *adminKey),
+		app.Register(services.NewRoom(app, store, *name, *adminKey),
 			component.WithName("room"),
 			component.WithNameFunc(strings.ToLower),
 		)

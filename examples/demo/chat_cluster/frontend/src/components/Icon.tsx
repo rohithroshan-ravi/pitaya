@@ -23,6 +23,15 @@ const PATHS = {
   refresh: ['M23 4v6h-6', 'M20.5 15a9 9 0 1 1-2.1-9.4L23 10'],
   menu: ['M3 6h18M3 12h18M3 18h18'],
   close: ['M18 6 6 18M6 6l12 12'],
+  plus: ['M12 5v14M5 12h14'],
+  trash: ['M3 6h18', 'M8 6V4h8v2', 'M19 6l-1 14H6L5 6', 'M10 11v6M14 11v6'],
+  smile: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M8 14s1.5 2 4 2 4-2 4-2', 'M9 9h.01M15 9h.01'],
+  crown: ['M3 7l4 4 5-7 5 7 4-4-2 12H5z'],
+  shield: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
+  more: ['M12 5h.01M12 12h.01M12 19h.01'],
+  copy: ['M9 9h11v11H9z', 'M5 15H4V4h11v1'],
+  link: ['M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7', 'M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7'],
+  chevronDown: ['m6 9 6 6 6-6'],
 }
 
 export type IconName = keyof typeof PATHS
