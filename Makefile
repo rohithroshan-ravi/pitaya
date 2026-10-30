@@ -42,6 +42,18 @@ run-jaeger-aio:
 run-chat-example:
 	@cd examples/testing && docker compose up -d etcd nats && cd ../demo/chat/ && go run main.go
 
+run-chat-cluster-connector:
+	@cd examples/testing && docker compose up -d etcd nats && cd ../demo/chat_cluster && go run . --type connector --metrics-port 9090
+
+run-chat-cluster-room:
+	@cd examples/demo/chat_cluster && go run . --type room --name $(or $(NAME),room-1) --metrics-port $(or $(METRICS_PORT),9091)
+
+run-chat-cluster-bots:
+	@cd examples/demo/chat_cluster && go run ./bots -n $(or $(N),20)
+
+run-chat-cluster-frontend:
+	@cd examples/demo/chat_cluster/frontend && npm install --no-fund --no-audit && npm run dev
+
 run-cluster-example-frontend-tracing:
 	@PITAYA_METRICS_PROMETHEUS_PORT=9090 OTEL_SDK_DISABLED=false OTEL_SERVICE_NAME=example-frontend OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 OTEL_EXPORTER_OTLP_PROTOCOL=grpc OTEL_TRACES_SAMPLER=parentbased_traceidratio OTEL_TRACES_SAMPLER_ARG="1" go run examples/demo/cluster/main.go
 
