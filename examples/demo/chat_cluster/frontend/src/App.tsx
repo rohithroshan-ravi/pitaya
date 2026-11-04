@@ -28,7 +28,7 @@ export default function App() {
   const peer = isDM(view.key) ? view.key!.slice(1) : null
   const members = view.guildId ? state.members[view.guildId] : undefined
   const onlineMembers = (members ?? []).filter((m) => state.online.includes(m.name)).map((m) => m.name)
-
+  console.log('onlineMembers', onlineMembers)
   const { guildUnread, guildMentions, dmUnread, unreadTotal } = useMemo(() => {
     const guildUnread: Record<string, number> = {}
     const guildMentions: Record<string, number> = {}
